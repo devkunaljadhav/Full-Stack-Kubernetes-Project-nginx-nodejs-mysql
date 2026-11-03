@@ -1,0 +1,28 @@
+CREATE DATABASE
+-----------------------
+Login to pod and create database
+-------------------------------
+
+kubectl get pods -n production
+
+
+kubectl exec -it mysql-0 -n production -- bash
+
+mysql -u root -p
+root123
+
+CREATE DATABASE company;
+
+USE company;
+
+CREATE TABLE employees (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(100)
+);
+
+
+INSERT INTO employees(name)
+VALUES ('Reyaz'),('Suman');
+
+INSERT INTO employees(name)
+VALUES ('Jack'),('Mike');

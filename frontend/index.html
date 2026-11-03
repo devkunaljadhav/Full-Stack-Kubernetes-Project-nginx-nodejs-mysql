@@ -1,0 +1,466 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Employee Management Dashboard</title>
+
+<style>
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    min-height: 100vh;
+    background: linear-gradient(135deg, #080f25, #111b36, #241c4d);
+    color: #fff;
+    padding: 30px;
+}
+
+.dashboard {
+    max-width: 1200px;
+    margin: auto;
+}
+
+header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px;
+    margin-bottom: 35px;
+}
+
+header h1 {
+    font-size: 30px;
+}
+
+header p {
+    color: #a5b4d4;
+    margin-top: 8px;
+}
+
+.logo {
+    font-size: 35px;
+}
+
+.stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.card {
+    padding: 25px;
+    border-radius: 18px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(15px);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+}
+
+.card span {
+    color: #a5b4d4;
+    font-size: 14px;
+}
+
+.card h2 {
+    font-size: 32px;
+    margin-top: 15px;
+}
+
+.blue { border-top: 3px solid #38bdf8; }
+.purple { border-top: 3px solid #a78bfa; }
+.green { border-top: 3px solid #34d399; }
+.orange { border-top: 3px solid #fb923c; }
+
+.content {
+    padding: 25px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+}
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 15px;
+    flex-wrap: wrap;
+    margin: 20px 0;
+}
+
+input {
+    padding: 13px 16px;
+    border-radius: 10px;
+    border: 1px solid #334466;
+    background: #172440;
+    color: white;
+    outline: none;
+    min-width: 230px;
+}
+
+input::placeholder {
+    color: #94a3b8;
+}
+
+button {
+    padding: 13px 22px;
+    border: none;
+    border-radius: 10px;
+    background: linear-gradient(45deg,#2563eb,#9333ea);
+    color: white;
+    font-weight: bold;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(59,130,246,0.3);
+}
+
+button:disabled {
+    opacity: 0.6;
+    cursor: wait;
+    transform: none;
+}
+
+.table-wrapper {
+    overflow-x: auto;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    min-width: 600px;
+}
+
+th, td {
+    padding: 17px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+th {
+    color: #93c5fd;
+    font-size: 13px;
+    text-transform: uppercase;
+}
+
+td {
+    color: #e2e8f0;
+}
+
+tr:hover td {
+    background: rgba(255,255,255,0.04);
+}
+
+.status {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 20px;
+    background: rgba(52,211,153,0.15);
+    color: #34d399;
+    font-size: 12px;
+}
+
+#message {
+    text-align: center;
+    padding: 25px;
+    color: #a5b4d4;
+}
+
+.error {
+    color: #f87171 !important;
+}
+
+footer {
+    text-align: center;
+    margin-top: 30px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+@media(max-width: 850px) {
+    .stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+@media(max-width: 500px) {
+    body {
+        padding: 15px;
+    }
+
+    .stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+
+    .card {
+        padding: 17px;
+    }
+
+    .card h2 {
+        font-size: 25px;
+    }
+
+    header h1 {
+        font-size: 23px;
+    }
+
+    .content {
+        padding: 15px;
+    }
+
+    input {
+        width: 100%;
+        min-width: 0;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<div class="dashboard">
+
+<header>
+    <div>
+        <h1>🚀 Employee Dashboard</h1>
+        <p>Manage your workforce from one place.</p>
+    </div>
+    <div class="logo">🏢</div>
+</header>
+
+<section class="stats">
+
+    <div class="card blue">
+        <span>Total Employees</span>
+        <h2 id="total">0</h2>
+    </div>
+
+    <div class="card purple">
+        <span>Active Employees</span>
+        <h2 id="active">0</h2>
+    </div>
+
+    <div class="card green">
+        <span>Departments</span>
+        <h2 id="departments">0</h2>
+    </div>
+
+    <div class="card orange">
+        <span>New Joiners</span>
+        <h2 id="newJoiners">0</h2>
+    </div>
+
+</section>
+
+<section class="content">
+
+    <h2>Employee Records</h2>
+
+    <div class="toolbar">
+
+        <input
+            type="text"
+            id="search"
+            placeholder="Search employees..."
+            oninput="filterEmployees()"
+        >
+
+        <button id="loadBtn" onclick="loadEmployees()">
+            ↻ Load Employees
+        </button>
+
+    </div>
+
+    <div class="table-wrapper">
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Employee ID</th>
+                    <th>Name</th>
+                    <th>Department</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+
+            <tbody id="employeeTable"></tbody>
+        </table>
+
+    </div>
+
+    <div id="message">
+        Click Load Employees to fetch records.
+    </div>
+
+</section>
+
+<footer>
+    Employee Management System | Powered by Docker & API
+</footer>
+
+</div>
+
+<script>
+
+let employees = [];
+
+async function loadEmployees() {
+
+    const message = document.getElementById("message");
+    const table = document.getElementById("employeeTable");
+    const button = document.getElementById("loadBtn");
+
+    button.disabled = true;
+    button.innerText = "Loading...";
+
+    message.className = "";
+    message.innerText = "⏳ Loading employee records...";
+
+    table.innerHTML = "";
+
+    try {
+
+        const response = await fetch("/api/employees");
+
+        if (!response.ok) {
+            throw new Error("API request failed: " + response.status);
+        }
+
+        const data = await response.json();
+
+        if (!Array.isArray(data)) {
+            throw new Error("Invalid API response format");
+        }
+
+        employees = data;
+
+        updateStatistics(employees);
+        filterEmployees();
+
+        if (employees.length === 0) {
+            message.innerText = "No employees found.";
+        } else {
+            message.innerText = "";
+        }
+
+    } catch (error) {
+
+        console.error(error);
+
+        employees = [];
+        updateStatistics([]);
+
+        message.className = "error";
+        message.innerText = "❌ Unable to load employees. Check your API.";
+
+    } finally {
+
+        button.disabled = false;
+        button.innerText = "↻ Load Employees";
+
+    }
+}
+
+function updateStatistics(data) {
+
+    document.getElementById("total").innerText = data.length;
+
+    document.getElementById("active").innerText =
+        data.filter(emp => (emp.status || "Active").toLowerCase() === "active").length;
+
+    document.getElementById("departments").innerText =
+        new Set(data.map(emp => emp.department).filter(Boolean)).size;
+
+    document.getElementById("newJoiners").innerText =
+        data.filter(emp => {
+            if (!emp.joiningDate) return false;
+
+            const date = new Date(emp.joiningDate);
+            const now = new Date();
+
+            const difference = (now - date) / (1000 * 60 * 60 * 24);
+
+            return !isNaN(date.getTime()) && difference >= 0 && difference <= 30;
+        }).length;
+}
+
+function filterEmployees() {
+
+    const search = document
+        .getElementById("search")
+        .value.toLowerCase();
+
+    const filtered = employees.filter(emp =>
+        String(emp.name || "").toLowerCase().includes(search) ||
+        String(emp.department || "").toLowerCase().includes(search) ||
+        String(emp.email || "").toLowerCase().includes(search)
+    );
+
+    renderEmployees(filtered);
+}
+
+function renderEmployees(data) {
+
+    const table = document.getElementById("employeeTable");
+    const message = document.getElementById("message");
+
+    table.innerHTML = "";
+
+    if (data.length === 0) {
+        message.innerText = employees.length
+            ? "No matching employees found."
+            : "No employees found.";
+        return;
+    }
+
+    message.innerText = "";
+
+    data.forEach(emp => {
+
+        const row = document.createElement("tr");
+
+        const id = document.createElement("td");
+        id.textContent = emp.id ?? emp.employeeId ?? "-";
+
+        const name = document.createElement("td");
+        name.textContent = emp.name ?? "-";
+
+        const department = document.createElement("td");
+        department.textContent = emp.department ?? "-";
+
+        const email = document.createElement("td");
+        email.textContent = emp.email ?? "-";
+
+        const status = document.createElement("td");
+        const badge = document.createElement("span");
+
+        badge.className = "status";
+        badge.textContent = emp.status || "Active";
+
+        status.appendChild(badge);
+
+        [id, name, department, email, status].forEach(cell => {
+            row.appendChild(cell);
+        });
+
+        table.appendChild(row);
+
+    });
+}
+
+</script>
+
+</body>
+</html>

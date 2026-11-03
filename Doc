@@ -1,202 +1,158 @@
-# Full-Stack Kubernetes Project on AWS
+# Full-Stack Kubernetes Project — Deployment Guide
 
-## Overview
+## Project Overview
 
-This project demonstrates a production-style, three-tier application deployment on Kubernetes using AWS. The architecture includes a simple frontend served by NGINX, a Node.js backend API, and a MySQL database managed as a StatefulSet with persistent storage.
+This repository contains a three-tier employee directory application deployed on Kubernetes:
 
-The solution is designed to showcase modern Kubernetes deployment patterns such as:
+1. **Frontend:** React application built with Vite and served by NGINX.
+2. **Backend:** Node.js and Express API.
+3. **Database:** MySQL running in a StatefulSet with persistent storage.
 
-- Containerized microservice deployment
-- Service-based internal networking
-- External access through NGINX Ingress
-- Secret and ConfigMap-based configuration management
-- Stateful database persistence with PVC-backed storage
-- Docker image build and push workflow
+The Kubernetes manifests are configured for the `production` namespace. The deployment uses Services for internal communication, a ConfigMap for non-sensitive database settings, a Secret for the database credential, and an NGINX Ingress for HTTP routing.
 
 ## Architecture
 
-The application follows a standard three-tier pattern:
+```text
+Browser
+  │
+  ▼
+NGINX Ingress
+  ├── /       → frontend-service → React files served by NGINX
+  └── /api    → backend-service  → Node.js API
+                                      │
+                                      ▼
+                                 MySQL StatefulSet
+                                      │
+                                      ▼
+                                  PVC → PV
+```
 
-User Browser
-  ↓
-Ingress Controller
-  ↓
-Frontend Service
-  ↓
-NGINX Frontend Pod
-  ↓
-Backend Service
-  ↓
-Node.js Backend Pod
-  ↓
-MySQL StatefulSet
-  ↓
-PVC → PV
+The frontend requests employee data from `GET /api/employees`. The Ingress routes that path to the backend; the frontend and API are exposed under the same host.
 
-## Technology Stack
-
-- Frontend: NGINX serving static HTML
-- Backend: Node.js + Express
-- Database: MySQL 8.0
-- Orchestration: Kubernetes
-- External routing: NGINX Ingress Controller
-- Cloud platform: AWS
-- Containerization: Docker
-
-## Project Structure
+## Repository Layout
 
 ```text
-Full-Stack-Kubernetes-Project-nginx-nodejs-mysql/
+.
 ├── backend/
 │   ├── Dockerfile
 │   ├── package.json
 │   └── server.js
-├── frontend/
+├── frontend-react/
+│   ├── public/
+│   ├── src/
+│   │   ├── assets/
+│   │   ├── components/
+│   │   ├── App.jsx
+│   │   ├── App.css
+│   │   ├── index.css
+│   │   └── main.jsx
 │   ├── Dockerfile
-│   └── index.html
-├── k8s/
-│   ├── backend-deployment.yml
-│   ├── backend-service.yml
-│   ├── configmap.yml
-│   ├── frontend-deployment.yml
-│   ├── frontend-service.yml
-│   ├── ingress.yml
-│   ├── mysql-headless.yml
-│   ├── mysql-statefulset.yml
-│   ├── namespace.yml
-│   └── secret.yml
+│   ├── index.html
+│   ├── package-lock.json
+│   ├── package.json
+│   └── vite.config.js
+├── frontend/                 # Legacy static HTML prototype; not used by the React deployment
 ├── Database/
 │   └── database-create.txt
-├── Doc
-├── Kubernetes AWS Complete Architecture Flow.png
-└── README.md
+└── k8s/
+    ├── backend-deployment.yml
+    ├── backend-service.yml
+    ├── configmap.yml
+    ├── frontend-deployment.yml
+    ├── frontend-service.yml
+    ├── ingress.yml
+    ├── mysql-headless.yml
+    ├── mysql-statefulset.yml
+    ├── namespace.yml
+    └── secret.yml
 ```
 
-## Application Flow
-
-Frontend → Backend API → MySQL Database → Persistent Storage
-
-## Prerequisites
-
-Before deploying the application, ensure the following tools are installed:
+## Requirements
 
 - Docker
-- Node.js and npm
-- kubectl
-- Access to a Kubernetes cluster on AWS
-- Optional: MySQL client for database validation
+- Node.js and npm (for local frontend development)
+- `kubectl`
+- A running Kubernetes cluster with a default or configured dynamic volume provisioner
+- Permission to create Deployments, Services, StatefulSets, Secrets, PVCs, and Ingress resources
+- An NGINX Ingress Controller installed in the cluster
+- A container registry account if publishing images to a remote registry
 
-### Install Docker
+## Run the Frontend Locally
 
-```bash
-sudo dnf install docker -y
-sudo systemctl enable docker
-sudo systemctl start docker
-```
-
-### Install Node.js and npm
+The Vite development server proxies `/api` requests to `http://localhost:3000`. Start the backend and make sure it can connect to a populated MySQL database, then run:
 
 ```bash
-sudo dnf install nodejs npm -y
-node -v
-npm -v
+cd frontend-react
+npm install
+npm run dev
 ```
 
-### Optional MySQL Client
+Open the local URL printed by Vite. Create a production build with:
 
 ```bash
-sudo dnf install mariadb105 -y
-mysql --version
+npm run build
 ```
 
-## Deployment Guide
+The build output is written to `frontend-react/dist/`.
 
-### 1. Create Kubernetes Namespace
+## Build and Publish Container Images
 
-```yaml
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: production
+The Kubernetes frontend Deployment currently references `trainerreyaz/frontend:v1`. Publish the React frontend to that image tag, or update the Deployment manifest to use your own registry and tag.
+
+### Backend
+
+```bash
+cd backend
+docker build -t trainerreyaz/backend:v1 .
+docker push trainerreyaz/backend:v1
 ```
 
-Apply it:
+### React frontend
+
+```bash
+cd frontend-react
+npm install
+docker build -t trainerreyaz/frontend:v1 .
+docker push trainerreyaz/frontend:v1
+```
+
+The frontend Dockerfile uses a multi-stage build: Vite compiles the React application, then NGINX serves the generated static files.
+
+## Deploy to Kubernetes
+
+Ensure `kubectl` is configured for the intended cluster before applying resources.
+
+### 1. Create namespace and configuration
 
 ```bash
 kubectl apply -f k8s/namespace.yml
-```
-
-### 2. Configure Database Settings
-
-The application uses a ConfigMap to store non-sensitive environment values.
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: app-config
-  namespace: production
-
-data:
-  DB_HOST: mysql-0.mysql
-  DB_PORT: "3306"
-  DB_NAME: company
-```
-
-Apply:
-
-```bash
 kubectl apply -f k8s/configmap.yml
-```
-
-### 3. Create Secret for MySQL Credentials
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: mysql-secret
-  namespace: production
-
-type: Opaque
-
-data:
-  MYSQL_ROOT_PASSWORD: cm9vdDEyMw==
-```
-
-Apply:
-
-```bash
 kubectl apply -f k8s/secret.yml
 ```
 
-### 4. Create MySQL Headless Service
+The checked-in Secret manifest is for demonstration only. Replace its credential before deploying to a shared or production environment. Kubernetes Secret values encoded in base64 are not encrypted by encoding alone.
 
-This provides stable DNS names for each MySQL pod.
+### 2. Deploy MySQL
 
 ```bash
 kubectl apply -f k8s/mysql-headless.yml
-```
-
-### 5. Deploy MySQL StatefulSet
-
-The database runs as a StatefulSet to preserve identity and data across pod restarts.
-
-```bash
 kubectl apply -f k8s/mysql-statefulset.yml
+kubectl get pods -n production
+kubectl get pvc -n production
 ```
 
-### 6. Initialize the Database
+Wait until `mysql-0` is ready and its persistent volume claim is bound.
 
-Access the MySQL pod and create the application database and table.
+### 3. Initialize the database
+
+Connect to the MySQL pod:
 
 ```bash
-kubectl get pods -n production
 kubectl exec -it mysql-0 -n production -- bash
 mysql -u root -p
 ```
 
-Then run:
+At the MySQL prompt, create the application database, table, and sample rows:
 
 ```sql
 CREATE DATABASE company;
@@ -207,928 +163,82 @@ CREATE TABLE employees (
   name VARCHAR(100)
 );
 
-INSERT INTO employees(name)
-VALUES ('Reyaz'), ('Suman');
-
-INSERT INTO employees(name)
-VALUES ('Jack'), ('Mike');
+INSERT INTO employees (name)
+VALUES ('Reyaz'), ('Suman'), ('Jack'), ('Mike');
 ```
 
-The SQL script is also available in the [Database/database-create.txt](Database/database-create.txt) file.
+The equivalent SQL setup is also kept in `Database/database-create.txt`.
 
-## Backend Service
+### 4. Deploy the application
 
-The backend is a Node.js application exposing an API for employee records.
-
-### Backend package configuration
-
-```json
-{
-  "name": "backend",
-  "version": "1.0.0",
-  "main": "server.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "mysql2": "^3.6.0"
-  }
-}
-```
-
-### Backend application logic
-
-```js
-const express = require('express');
-const mysql = require('mysql2');
-
-const app = express();
-const connection = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: 'root',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-});
-
-app.get('/api/employees', (req, res) => {
-  connection.query('SELECT * FROM employees', (err, results) => {
-    if (err) {
-      res.status(500).send(err);
-    } else {
-      res.json(results);
-    }
-  });
-});
-
-app.listen(3000, () => {
-  console.log('Backend running on port 3000');
-});
-```
-
-### Build and Publish Backend Image
-
-```bash
-cd backend
-docker build -t backend:v1 .
-docker tag backend:v1 trainerreyaz/backend:v1
-docker login
-docker push trainerreyaz/backend:v1
-```
-
-### Deploy Backend
+The image names in the manifests must exist in a registry accessible to the cluster.
 
 ```bash
 kubectl apply -f k8s/backend-deployment.yml
 kubectl apply -f k8s/backend-service.yml
-```
-
-## Frontend Service
-
-The frontend is a lightweight static page served by NGINX. It fetches employee data from the backend using JavaScript.
-
-### Frontend Docker Build
-
-```bash
-cd frontend
-docker build -t frontend:v1 .
-docker tag frontend:v1 trainerreyaz/frontend:v1
-docker push trainerreyaz/frontend:v1
-```
-
-### Deploy Frontend
-
-```bash
 kubectl apply -f k8s/frontend-deployment.yml
 kubectl apply -f k8s/frontend-service.yml
 ```
 
-## Ingress Configuration
+### 5. Install Ingress and apply routing
 
-NGINX Ingress routes traffic to the correct service:
-
-- `/` → Frontend service
-- `/api` → Backend service
+Install an NGINX Ingress Controller if the cluster does not already have one. For example, on a cloud-provider cluster:
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+```
+
+Then apply this project's Ingress:
+
+```bash
 kubectl apply -f k8s/ingress.yml
 ```
 
-## Accessing the Application
+The Ingress sends `/` to the frontend Service and `/api` to the backend Service. Obtain the ingress controller's external address and open it in a browser.
 
-Check the ingress service and application pods:
+## Verify and Operate
 
 ```bash
-kubectl get svc -n ingress-nginx
+kubectl get pods,services -n production
+kubectl get pvc -n production
+kubectl get ingress -n production
+kubectl get services -n ingress-nginx
+```
+
+The frontend calls `GET /api/employees`; a successful response is an array of records containing `id` and `name`.
+
+To check persistence after a MySQL pod restart:
+
+```bash
+kubectl delete pod mysql-0 -n production
 kubectl get pods -n production
 ```
 
-Once the ingress is ready, access the application from the external IP or hostname assigned by the environment.
+The StatefulSet recreates the pod. Data is retained when the associated PVC and underlying PV remain available and are not deleted.
 
-## Persistence and High Availability
+## Configuration Reference
 
-The MySQL database is deployed as a StatefulSet with a persistent volume claim template:
+| Setting | Source | Purpose |
+|---|---|---|
+| `DB_HOST` | `k8s/configmap.yml` | MySQL pod DNS name |
+| `DB_NAME` | `k8s/configmap.yml` | Application database |
+| `DB_PASSWORD` | `k8s/secret.yml` → backend Deployment | Backend database credential |
+| `MYSQL_ROOT_PASSWORD` | `k8s/secret.yml` → MySQL StatefulSet | MySQL root credential |
+| Frontend API path | React application | `/api/employees` |
 
-```yaml
-volumeClaimTemplates:
-- metadata:
-    name: mysql-storage
-  spec:
-    accessModes:
-    - ReadWriteOnce
-    resources:
-      requests:
-        storage: 2Gi
-```
-
-This ensures data remains available even if the MySQL pod is restarted or recreated.
-
-## Security Notes
-
-- Use Kubernetes Secrets for sensitive values such as database passwords.
-- Prefer a real secret management strategy in production, rather than hard-coded credentials in manifests.
-- Restrict ingress exposure and internal service access based on environment and network policy needs.
+Use your own registry image references and credentials when adapting these manifests to another environment.
 
 ## Troubleshooting
 
-### If MySQL pod is deleted
-
-StatefulSets recreate the pod with the same identity and attached persistent volume if the claim remains intact.
-
-```bash
-kubectl delete pod mysql-0 -n production
-kubectl get pods -n production
-```
-
-### Decode the secret directly
-
-```bash
-kubectl get secret mysql-secret \
-  -n production \
-  -o jsonpath="{.data.MYSQL_ROOT_PASSWORD}" | base64 -d
-```
-
-## Learning Outcomes
-
-This project provides hands-on experience with:
-
-- Kubernetes architecture and service discovery
-- Containerized application deployment
-- ConfigMaps and Secrets
-- Stateful workloads with persistent storage
-- Ingress routing and external access
-- Docker image publishing and deployment lifecycle
-
-## Conclusion
-
-This project is a practical, beginner-to-intermediate Kubernetes deployment exercise that demonstrates how full-stack services can be packaged, deployed, and managed in a cloud-native environment. It lays the groundwork for scaling the frontend into a React application and improving the deployment with production-grade automation in the future.
-
----
-
-This document was prepared as a professional project reference for the repository and can be extended for future enhancements such as React migration, Helm deployment, CI/CD automation, or cloud-native monitoring.
-
-root123
-
-CREATE DATABASE company;
-
-USE company;
-
-CREATE TABLE employees (
-  id INT AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100)
-);
-
-
-INSERT INTO employees(name)
-VALUES ('Reyaz'),('Suman');
-
-INSERT INTO employees(name)
-VALUES ('Jack'),('Mike');
-
-
-STEP 7 — REAL NODEJS BACKEND
----------------------------
-
-backend/package.json
---------------------
-
-mkdir backend
-cd backend
-
-vi package.json
-
-{
-  "name": "backend",
-  "version": "1.0.0",
-  "main": "server.js",
-  "dependencies": {
-    "express": "^4.18.2",
-    "mysql2": "^3.6.0"
-  }
-}
-
-
-backend/server.js
------------------
-
-vi server.js
-
-const express = require('express');
-const mysql = require('mysql2');
-
-const app = express();
-
-const connection = mysql.createConnection({
-  host: process.env.DB_HOST,
-  user: 'root',
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME
-});
-
-app.get('/api/employees', (req, res) => {
-
-  connection.query(
-    'SELECT * FROM employees',
-    (err, results) => {
-
-      if (err) {
-        res.status(500).send(err);
-      } else {
-        res.json(results);
-      }
-    }
-  );
-});
-
-app.listen(3000, () => {
-  console.log('Backend running on port 3000');
-});
-
-backend/Dockerfile
-------------------
-
-
-vi Dockerfile
-
-FROM node:18
-
-WORKDIR /app
-
-COPY package.json .
-RUN npm install
-
-COPY server.js .
-
-EXPOSE 3000
-
-CMD ["node", "server.js"]
-
-
-Build Docker Image
-----------------
-docker build -t backend:v1 .
-
-docker tag backend:v1 trainerreyaz/backend:v1
-
-docker login
-
-docker push trainerreyaz/backend:v1
-
-STEP 8 — BACKEND DEPLOYMENT
---------------------------
-
-vi backend-deployment.yml
-
-apiVersion: apps/v1
-kind: Deployment
-
-metadata:
-  name: backend
-  namespace: production
-
-spec:
-  replicas: 2
-
-  selector:
-    matchLabels:
-      app: backend
-
-  template:
-    metadata:
-      labels:
-        app: backend
-
-    spec:
-      containers:
-      - name: backend
-
-        image: trainerreyaz/backend:v1
-
-        ports:
-        - containerPort: 3000
-
-        env:
-        - name: DB_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: app-config
-              key: DB_HOST
-
-        - name: DB_NAME
-          valueFrom:
-            configMapKeyRef:
-              name: app-config
-              key: DB_NAME
-
-        - name: DB_PASSWORD
-          value: root123
-
-kubectl apply -f backend-deployment.yml
-
-
-BACKEND SERVICE
---------------
-
-vi backend-service.yml
-
-apiVersion: v1
-kind: Service
-
-metadata:
-  name: backend-service
-  namespace: production
-
-spec:
-  selector:
-    app: backend
-
-  ports:
-  - port: 80
-    targetPort: 3000
-
-kubectl apply -f backend-service.yml
-
-
-STEP 9 — REAL FRONTEND
----------------------
-
-cd ..
-
-mkdir frontend
-
-cd frontend
-
-vi index.html
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-
-    <title>Employee Dashboard</title>
-
-    <style>
-
-        *{
-            margin:0;
-            padding:0;
-            box-sizing:border-box;
-        }
-
-        body{
-            font-family: Arial, Helvetica, sans-serif;
-            min-height:100vh;
-            background: linear-gradient(135deg,#0f172a,#1e293b,#312e81);
-            display:flex;
-            justify-content:center;
-            align-items:center;
-            overflow:hidden;
-            position:relative;
-        }
-
-        /* Animated Background */
-
-        .bg{
-            position:absolute;
-            width:100%;
-            height:100%;
-            overflow:hidden;
-            z-index:1;
-        }
-
-        .circle{
-            position:absolute;
-            border-radius:50%;
-            background:rgba(255,255,255,0.05);
-            animation:float 10s linear infinite;
-        }
-
-        .circle:nth-child(1){
-            width:180px;
-            height:180px;
-            top:10%;
-            left:10%;
-        }
-
-        .circle:nth-child(2){
-            width:120px;
-            height:120px;
-            bottom:15%;
-            right:15%;
-            animation-duration:14s;
-        }
-
-        .circle:nth-child(3){
-            width:80px;
-            height:80px;
-            top:50%;
-            left:70%;
-            animation-duration:12s;
-        }
-
-        @keyframes float{
-            0%{
-                transform:translateY(0px) rotate(0deg);
-            }
-            50%{
-                transform:translateY(-30px) rotate(180deg);
-            }
-            100%{
-                transform:translateY(0px) rotate(360deg);
-            }
-        }
-
-        /* Main Card */
-
-        .container{
-            width:450px;
-            padding:35px;
-            border-radius:25px;
-            background:rgba(255,255,255,0.08);
-            backdrop-filter:blur(20px);
-            border:1px solid rgba(255,255,255,0.15);
-            box-shadow:0 10px 40px rgba(0,0,0,0.4);
-            z-index:2;
-            animation:slideUp 0.8s ease;
-        }
-
-        @keyframes slideUp{
-            from{
-                opacity:0;
-                transform:translateY(40px);
-            }
-            to{
-                opacity:1;
-                transform:translateY(0);
-            }
-        }
-
-        h1{
-            color:white;
-            text-align:center;
-            margin-bottom:25px;
-            font-size:34px;
-            letter-spacing:1px;
-        }
-
-        p{
-            color:rgba(255,255,255,0.7);
-            text-align:center;
-            margin-bottom:30px;
-            font-size:15px;
-        }
-
-        button{
-            width:100%;
-            padding:16px;
-            border:none;
-            border-radius:14px;
-            background:linear-gradient(45deg,#06b6d4,#3b82f6);
-            color:white;
-            font-size:18px;
-            font-weight:bold;
-            cursor:pointer;
-            transition:0.3s;
-            margin-bottom:25px;
-            position:relative;
-            overflow:hidden;
-        }
-
-        button:hover{
-            transform:translateY(-3px);
-            box-shadow:0 10px 20px rgba(59,130,246,0.5);
-        }
-
-        button:active{
-            transform:scale(0.98);
-        }
-
-        ul{
-            list-style:none;
-            max-height:350px;
-            overflow-y:auto;
-        }
-
-        ul::-webkit-scrollbar{
-            width:6px;
-        }
-
-        ul::-webkit-scrollbar-thumb{
-            background:#38bdf8;
-            border-radius:10px;
-        }
-
-        li{
-            background:rgba(255,255,255,0.08);
-            margin-bottom:14px;
-            padding:18px;
-            border-radius:14px;
-            color:white;
-            font-size:17px;
-            display:flex;
-            align-items:center;
-            gap:14px;
-            transition:0.3s;
-            border-left:5px solid #38bdf8;
-            animation:fadeIn 0.5s ease;
-        }
-
-        li:hover{
-            transform:translateX(6px);
-            background:rgba(255,255,255,0.15);
-        }
-
-        li::before{
-            content:"👨‍💼";
-            font-size:22px;
-        }
-
-        @keyframes fadeIn{
-            from{
-                opacity:0;
-                transform:translateY(15px);
-            }
-            to{
-                opacity:1;
-                transform:translateY(0);
-            }
-        }
-
-        .loading{
-            text-align:center;
-            color:white;
-            margin-top:15px;
-            font-size:16px;
-        }
-
-        .error{
-            text-align:center;
-            color:#f87171;
-            margin-top:15px;
-        }
-
-        @media(max-width:500px){
-
-            .container{
-                width:92%;
-                padding:25px;
-            }
-
-            h1{
-                font-size:28px;
-            }
-        }
-
-    </style>
-</head>
-
-<body>
-
-    <div class="bg">
-        <div class="circle"></div>
-        <div class="circle"></div>
-        <div class="circle"></div>
-    </div>
-
-    <div class="container">
-
-        <h1>🚀 Employee Dashboard</h1>
-
-        <p>
-            View and manage employee records dynamically
-        </p>
-
-        <button onclick="loadEmployees()">
-            Load Employees
-        </button>
-
-        <div id="status"></div>
-
-        <ul id="employees"></ul>
-
-    </div>
-
-<script>
-
-async function loadEmployees() {
-
-    const status =
-        document.getElementById('status');
-
-    const list =
-        document.getElementById('employees');
-
-    status.innerHTML =
-        '<div class="loading">⏳ Loading employees...</div>';
-
-    list.innerHTML = '';
-
-    try {
-
-        const response =
-            await fetch('/api/employees');
-
-        if(!response.ok){
-            throw new Error(
-                'Failed to fetch employees'
-            );
-        }
-
-        const data =
-            await response.json();
-
-        status.innerHTML = '';
-
-        if(data.length === 0){
-
-            status.innerHTML =
-                '<div class="loading">No employees found</div>';
-
-            return;
-        }
-
-        data.forEach(emp => {
-
-            const li =
-                document.createElement('li');
-
-            li.innerText =
-                emp.name;
-
-            list.appendChild(li);
-        });
-
-    } catch(error){
-
-        console.log(error);
-
-        status.innerHTML =
-            '<div class="error">❌ Unable to load employees</div>';
-    }
-}
-
-</script>
-
-</body>
-</html>
-
-
-frontend/Dockerfile
--------------------
-
-vi Dockerfile
-
-FROM nginx
-
-COPY index.html /usr/share/nginx/html/index.html
-
-
-docker build -t frontend:v1 .
-
-docker tag frontend:v1 trainerreyaz/frontend:v1
-
-docker push trainerreyaz/frontend:v1
-
-STEP 10 — FRONTEND DEPLOYMENT
------------------------------
-
-vi frontend-deployment.yml
-
-apiVersion: apps/v1
-kind: Deployment
-
-metadata:
-  name: frontend
-  namespace: production
-
-spec:
-  replicas: 2
-
-  selector:
-    matchLabels:
-      app: frontend
-
-  template:
-    metadata:
-      labels:
-        app: frontend
-
-    spec:
-      containers:
-      - name: frontend
-
-        image: trainerreyaz/frontend:v1
-
-        ports:
-        - containerPort: 80
-
-kubectl apply -f frontend-deployment.yml
-
-FRONTEND SERVICE
----------------
-
-vi frontend-service.yml
-
-apiVersion: v1
-kind: Service
-
-metadata:
-  name: frontend-service
-  namespace: production
-
-spec:
-  selector:
-    app: frontend
-
-  ports:
-  - port: 80
-    targetPort: 80
-
-kubectl create -f frontend-service.yml
-
-
-STEP 11 — INSTALL INGRESS CONTROLLER
----------------------------------
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
-
-kubectl get pods -n ingress-nginx
-
-STEP 12 — CREATE INGRESS
------------------------
-vi ingress.yml
-
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-
-metadata:
-  name: app-ingress
-  namespace: production
-
-spec:
-  ingressClassName: nginx
-
-  rules:
-  - http:
-      paths:
-
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: frontend-service
-            port:
-              number: 80
-
-      - path: /api
-        pathType: Prefix
-        backend:
-          service:
-            name: backend-service
-            port:
-              number: 80
-
-kubectl apply -f ingress.yml
-
-STEP 13 — ACCESS APPLICATION
----------------------------
-kubectl get svc -n ingress-nginx
-
-kubectl get pods -n production
-	
-
-
-Browser
-   ↓
-Ingress
-   ↓
-Frontend Service
-   ↓
-Frontend Pod
-   ↓
-Backend Service
-   ↓
-NodeJS Backend
-   ↓
-MySQL StatefulSet
-   ↓
-PVC
-   ↓
-Persistent Disk
-
-
-WHAT HAPPENS IF MYSQL POD DELETES?
-
-kubectl delete pod mysql-0 -n production
-
-StatefulSet recreates:
-
-same pod name
-same PVC
-same data
-
-Data persists ✅
-
-kubectl get pods -n production
-
-
-Now lets add few rows in the table
----------------------------------
-
-kubectl exec -it mysql-0 -n production -- bash
-
-mysql -u root -p
-root123
-
-USE company;
-
-
-INSERT INTO employees(name)
-VALUES ('Pettri'),('rakesh');
-
-
-Refresh the page
-
-DECODE SECRET DIRECTLY
---------------------
-
-kubectl get secret mysql-secret \
--n production \
--o jsonpath="{.data.MYSQL_ROOT_PASSWORD}" | base64 -d
-
-Student TASK
-------------
-
-UPDATED BACKEND DEPLOYMENT [In this we were using root123 password directly, instead use this]
-------------------------
-
-Replace:
-
-- name: DB_PASSWORD
-  value: root123
-
-
-- name: DB_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: mysql-secret
-      key: MYSQL_ROOT_PASSWORD
-
-
-TASK
-----
-Update index.html with another style --> build --> push to dockerhub --> and deploy without any downtime
-
-IF YOU WANT REAL REACT
-======================
-
-Then frontend should include:
-
-npx create-react-app frontend
-
-with:
-
-React components
-package.json
-npm build
-React routing
-
-Then Dockerfile becomes:
------------------------
-FROM node:18 as build
-
-WORKDIR /app
-
-COPY . .
-
-RUN npm install
-RUN npm run build
-
-FROM nginx
-
-COPY --from=build /app/build /usr/share/nginx/html
-
-That would be a true React frontend.
-
-Task
----
-
-Udpate root123 with secrets in backend yaml
+- **Frontend cannot load employee records:** Check the Ingress paths, backend Service endpoints, backend pod logs, and MySQL readiness.
+- **Database connection errors:** Verify the `DB_HOST`, `DB_NAME`, and Secret key references match the MySQL Service and database configuration.
+- **MySQL pod is pending:** Inspect the PVC and cluster storage provisioner with `kubectl describe pod mysql-0 -n production` and `kubectl describe pvc -n production`.
+- **Image pull errors:** Confirm the image name/tag exists and the cluster can access the registry.
+- **Ingress has no external address:** Check the ingress controller Service and the cloud provider's load balancer provisioning.
+
+## Security and Production Notes
+
+- Replace all demo credentials. Do not commit real passwords or tokens.
+- Use a managed secret store or an approved encrypted Kubernetes Secret workflow for production.
+- The manifests are a learning/demo baseline; review resource limits, health probes, TLS, access controls, and database backup/restore procedures before production use.
+- A single MySQL replica demonstrates stateful storage, not database high availability.

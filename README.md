@@ -1,139 +1,111 @@
-# Full-Stack Kubernetes Project on AWS
+# Workforce Directory on Kubernetes
 
-A production-style three-tier Kubernetes application deployed on AWS, built around a React frontend, Node.js backend, and MySQL database. The project demonstrates containerization, service discovery, ingress routing, secrets management, and persistent storage in a Kubernetes environment.
+A three-tier employee directory deployed to Kubernetes on AWS. The application combines a React dashboard, a Node.js API, and a MySQL database, with Kubernetes services and an NGINX Ingress controller connecting the components.
 
-## Architecture Overview
+> This repository is a learning project and deployment reference. Review the security and operational guidance before using it in a production environment.
 
-The solution follows a three-tier architecture:
-
-- Frontend layer: React + Vite, served by NGINX
-- Backend layer: Node.js + Express API
-- Data layer: MySQL running as a StatefulSet with persistent storage
-
-Traffic flow:
+## Architecture
 
 ```text
-User Browser
-   ↓
-Ingress Controller
-   ↓
-Frontend Service
-   ↓
-NGINX Frontend Pod
-   ↓
-Backend Service
-   ↓
-Node.js Backend Pod
-   ↓
-MySQL StatefulSet
-   ↓
-PVC → PV
+Browser
+  │
+  ▼
+NGINX Ingress
+  ├── /       → frontend-service → React app served by NGINX
+  └── /api    → backend-service  → Node.js API
+                                      │
+                                      ▼
+                               MySQL StatefulSet
+                                      │
+                                      ▼
+                                PersistentVolume
 ```
 
-## Tech Stack
+The MySQL pod uses a persistent volume claim. The frontend and backend deployments each run two replicas.
 
-- Kubernetes
-- Docker
-- AWS
-- React
-- Vite
-- NGINX
-- Node.js
-- Express.js
-- MySQL 8.0
-- kubectl
+![Kubernetes deployment architecture](Kubernetes%20AWS%20Complete%20Architecture%20Flow.png)
 
-## Repository Structure
+## Technology stack
 
-```text
-Full-Stack-Kubernetes-Project-nginx-nodejs-mysql/
-├── backend/
-│   ├── Dockerfile
-│   ├── package.json
-│   └── server.js
-├── frontend-react/
-│   ├── public/
-│   ├── src/
-│   │   ├── assets/
-│   │   ├── components/
-│   │   ├── App.jsx
-│   │   ├── App.css
-│   │   ├── index.css
-│   │   └── main.jsx
-│   ├── Dockerfile
-│   ├── index.html
-│   ├── package-lock.json
-│   ├── package.json
-│   └── vite.config.js
-├── frontend/                  # Original static HTML prototype; not used by React deployment
-├── k8s/
-│   ├── backend-deployment.yml
-│   ├── backend-service.yml
-│   ├── configmap.yml
-│   ├── frontend-deployment.yml
-│   ├── frontend-service.yml
-│   ├── ingress.yml
-│   ├── mysql-headless.yml
-│   ├── mysql-statefulset.yml
-│   ├── namespace.yml
-│   └── secret.yml
-├── Database/
-│   └── database-create.txt
-├── Doc
-├── Kubernetes AWS Complete Architecture Flow.png
-├── README.md
-└── .gitignore
-```
+| Layer | Technologies |
+| --- | --- |
+| Frontend | React, Vite, NGINX |
+| API | Node.js, Express, mysql2 |
+| Database | MySQL 8.0 |
+| Containers and orchestration | Docker, Kubernetes, kubectl |
+| Routing | NGINX Ingress |
+| Cloud target | AWS Kubernetes cluster |
 
 ## Features
 
-- Containerized frontend and backend deployment
-- MySQL persistence with StatefulSet + PVC
-- Secrets and ConfigMaps for configuration
-- Internal Kubernetes service communication
-- External routing using NGINX Ingress
-- AWS-based Kubernetes deployment model
-- Simple employee dashboard application
+- Employee directory with search, refresh, loading, and error states
+- REST API backed by MySQL
+- Kubernetes Deployments and Services for the frontend and API
+- MySQL StatefulSet with persistent storage
+- ConfigMap-based application configuration and Secret-based database credentials
+- Path-based ingress routing for the UI and API
+
+## Repository layout
+
+```text
+.
+├── backend/                  # Node.js API and Dockerfile
+├── frontend-react/           # React + Vite application and Dockerfile
+├── frontend/                 # Original static HTML prototype
+├── Database/                 # Database setup notes
+├── k8s/                      # Kubernetes manifests
+├── screenshoots/             # Application screenshots
+├── Kubernetes AWS Complete Architecture Flow.png
+└── README.md
+```
+
+The deployed frontend is `frontend-react/`. The `frontend/` directory is an earlier static prototype and is not used by the Kubernetes deployment.
 
 ## Prerequisites
 
-Before starting, install:
-
+- An AWS Kubernetes cluster and a working `kubectl` context
 - Docker
-- Node.js and npm
-- kubectl
-- Access to a Kubernetes cluster on AWS
+- A container registry accessible to the cluster
+- An NGINX Ingress controller installed in the cluster
 
-## Quick Start
+Check that `kubectl` is connected to the intended cluster before applying manifests:
 
-### 1. Create namespace
+```bash
+kubectl config current-context
+kubectl get nodes
+```
+
+## Deploy to Kubernetes
+
+Run the following commands from the repository root. The manifests create resources in the `production` namespace.
+
+### 1. Create the namespace and application configuration
 
 ```bash
 kubectl apply -f k8s/namespace.yml
+kubectl apply -f k8s/configmap.yml
 ```
 
-### 2. Apply ConfigMap and Secret
+### 2. Create the database Secret
+
+Create the Secret directly in the cluster with a strong password:
 
 ```bash
-kubectl apply -f k8s/configmap.yml
-kubectl apply -f k8s/secret.yml
+kubectl create secret generic mysql-secret --namespace production --from-literal=MYSQL_ROOT_PASSWORD='<your-strong-password>'
 ```
 
-### 3. Deploy MySQL database
+The manifests expect the Secret to be named `mysql-secret` and the key to be `MYSQL_ROOT_PASSWORD`. Do not commit real credentials. Kubernetes Secret values stored as Base64 in YAML are encoded, not encrypted. Avoid applying the checked-in `k8s/secret.yml`; it contains a demo credential and is not suitable for production.
+
+### 3. Start MySQL and create the schema
 
 ```bash
 kubectl apply -f k8s/mysql-headless.yml
 kubectl apply -f k8s/mysql-statefulset.yml
+kubectl rollout status statefulset/mysql --namespace production
+kubectl exec -it mysql-0 --namespace production -- mysql -u root -p
 ```
 
-### 4. Initialize the database
-
-```bash
-kubectl exec -it mysql-0 -n production -- bash
-mysql -u root -p
-```
-
-Then run:
+Enter the password used when creating the Secret. At the MySQL prompt, initialize the database and sample employee records:
 
 ```sql
 CREATE DATABASE company;
@@ -144,30 +116,23 @@ CREATE TABLE employees (
   name VARCHAR(100)
 );
 
-INSERT INTO employees(name)
-VALUES ('Reyaz'), ('Suman');
-
-INSERT INTO employees(name)
-VALUES ('Jack'), ('Mike');
+INSERT INTO employees (name)
+VALUES ('Reyaz'), ('Suman'), ('Jack'), ('Mike');
 ```
 
-### 5. Build and push Docker images
+### 4. Build and push the application images
+
+The deployment manifests currently reference `trainerreyaz/backend:v1` and `trainerreyaz/frontend:v1`. Build and push images with those names, or update the `image` fields in `k8s/backend-deployment.yml` and `k8s/frontend-deployment.yml` to match your registry.
 
 ```bash
-cd backend
-docker build -t backend:v1 .
-docker tag backend:v1 trainerreyaz/backend:v1
+docker build -t trainerreyaz/backend:v1 ./backend
 docker push trainerreyaz/backend:v1
 
-cd ../frontend-react
-npm install
-npm run build
-docker build -t frontend:v1 .
-docker tag frontend:v1 trainerreyaz/frontend:v1
+docker build -t trainerreyaz/frontend:v1 ./frontend-react
 docker push trainerreyaz/frontend:v1
 ```
 
-### 6. Deploy backend and frontend
+### 5. Deploy the application
 
 ```bash
 kubectl apply -f k8s/backend-deployment.yml
@@ -176,51 +141,68 @@ kubectl apply -f k8s/frontend-deployment.yml
 kubectl apply -f k8s/frontend-service.yml
 ```
 
-### 7. Install ingress controller and route traffic
+### 6. Install ingress and apply the route
+
+If the cluster does not already have an NGINX Ingress controller, install one using the [official ingress-nginx installation guidance](https://kubernetes.github.io/ingress-nginx/deploy/). For production, follow the versioned instructions appropriate for your cluster.
+
+Then apply this project's ingress:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
 kubectl apply -f k8s/ingress.yml
 ```
 
-### 8. Verify application status
+The ingress has no host restriction: it routes `/` to the frontend and `/api` to the backend. On AWS, the ingress controller's Service must be reachable through a provisioned load balancer.
+
+### 7. Check the deployment
 
 ```bash
-kubectl get pods -n production
-kubectl get svc -n ingress-nginx
+kubectl get pods --namespace production
+kubectl get services --namespace production
+kubectl get ingress --namespace production
+kubectl get services --namespace ingress-nginx
 ```
 
-## Backend API
+Open the external address of the ingress controller's load balancer in a browser. The employee API is available at `/api/employees` on the same address.
 
-The backend exposes a simple REST endpoint:
+## Local development
 
-- GET `/api/employees`
+The Vite development server proxies requests under `/api` to `http://localhost:3000`. To run the frontend locally, first make the API available at that address and configure its `DB_HOST`, `DB_NAME`, and `DB_PASSWORD` environment variables for a reachable MySQL database.
 
-This endpoint returns all employee rows from the MySQL database.
+In PowerShell, start the backend in one terminal. First, make sure your local MySQL instance has the `company` database and `employees` table (see the SQL above), then set the connection values:
 
-## Frontend
-
-The React + Vite frontend is a responsive employee directory dashboard. It supports live employee search, refresh, loading and error states, and fetches employee data from `/api/employees`. Vite proxies `/api` to `http://localhost:3000` during local development. The production Docker image builds the React app and serves its static output through NGINX.
-
-The original `frontend/` directory is retained as a static HTML prototype. Build and deploy the React application from `frontend-react/`.
-
-To run the frontend in development mode, start the backend on port `3000`, then run:
-
-```bash
-cd frontend-react
+```powershell
+cd backend
 npm install
+$env:DB_HOST = "127.0.0.1"
+$env:DB_NAME = "company"
+$env:DB_PASSWORD = "<your-mysql-password>"
+node server.js
+```
+
+In another terminal, start the frontend:
+
+```powershell
+cd frontend-react
+npm ci
 npm run dev
 ```
 
-## Security
+The Vite server prints the local URL when it starts.
 
-This project uses Kubernetes Secrets for sensitive values, including the MySQL root password. In production-grade environments, it is recommended to use stronger secret management tools and restrict network access with policies and role-based controls.
+## API
 
-## Notes
+### `GET /api/employees`
 
-- This project is a learning-focused implementation and can be extended with Helm, CI/CD, and production monitoring.
-- The database is intentionally deployed as a StatefulSet to demonstrate persistence behavior and stable network identity.
+Returns all rows in the MySQL `employees` table as a JSON array. Each row includes the `id` and `name` fields. The endpoint requires the database and table to be initialized.
 
-## License
+## Configuration and security notes
 
-This project is intended for educational and demonstration purposes.
+- `k8s/configmap.yml` sets the database host (`mysql-0.mysql`) and database name (`company`).
+- The backend reads `DB_HOST`, `DB_NAME`, and `DB_PASSWORD` from its environment.
+- The database root password is supplied through the `mysql-secret` Kubernetes Secret.
+- For a production deployment, use an external secret manager, a least-privilege database account, TLS, restricted network access, and appropriate backups and monitoring.
+- Review the manifests and container image sources before deploying them to a cluster.
+
+## Project status
+
+This project is intended for educational and demonstration purposes. It can be extended with infrastructure automation, CI/CD, database migrations, monitoring, and production-grade secret management.

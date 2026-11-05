@@ -1,3 +1,6 @@
+apiVersion: apps/v1
+kind: Deployment
+
 metadata:
   name: backend
   namespace: production
@@ -41,4 +44,3 @@ spec:
             secretKeyRef:
               name: mysql-secret
               key: MYSQL_ROOT_PASSWORD
-
